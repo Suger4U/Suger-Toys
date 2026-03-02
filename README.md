@@ -14,18 +14,15 @@ Each project is self-contained and stored in its own directory.
 
 ```text
 Suger-Toys/
-├─ Aeterna-Memoria/
-│  ├─ index.html
-│  ├─ README.md
-│  └─ LICENSE
+├─ README.md
+└─ Aeterna-Memoria/
+   ├─ index.html
+   ├─ README.md
+   └─ LICENSE
 ```
 
 Each subdirectory represents an independent project.
 每个子目录代表一个独立项目。
-
-* `index.html` – Main entry file / 项目主入口文件
-* `README.md` – Project documentation / 项目说明文档
-* `LICENSE` – Project license / 项目许可证
 
 ---
 
@@ -34,6 +31,7 @@ Each subdirectory represents an independent project.
 ### 1. Aeterna Memoria
 
 **Type ｜ 类型：** Interactive Web Toy / 交互式网页玩具
+
 **Technology ｜ 技术：** WebGL (Three.js), MediaPipe Hands
 
 A browser-based interactive visual experience controlled by hand gestures.
@@ -44,7 +42,7 @@ The objective is to capture exactly the required number of objects in each round
 用户张开手掌召唤视觉法阵并拦截飞行物体。
 每一轮需精确捕捉指定数量的目标，以完成隐藏的数字序列。
 
-Main features ｜ 主要功能：
+**Main features ｜ 主要功能：**
 
 * Real-time hand tracking via webcam
   实时摄像头手部追踪
@@ -55,18 +53,17 @@ Main features ｜ 主要功能：
 * Single-file deployment (`index.html`)
   单文件部署结构
 
-Location ｜ 项目路径：
+**Live Demo ｜ 在线体验：**
+
+[https://aeterna-memoria-for-sara.netlify.app/](https://aeterna-memoria-for-sara.netlify.app/)
+
+**Location ｜ 项目路径：**
 
 ```
 Aeterna-Memoria/
 ```
 
----
-
-## Usage ｜ 使用方式
-
-Each project can be opened independently.
-每个子项目均可独立运行。
+**Usage ｜ 使用方式**
 
 Example ｜ 示例：
 
@@ -88,9 +85,14 @@ Unless otherwise specified in a subproject directory, all projects in this repos
 
 ## Notice ｜ 声明
 
-This repository is intended to be freely accessible.
-本仓库旨在保持自由访问。
+Commercial use is permitted under the terms of the MIT License.  
+If these projects, or substantial portions of their source code, are incorporated into a commercial product or paid service, please clearly indicate in a visible location that the original implementation is publicly available on GitHub at no cost.
 
-If you obtained any project from this repository through a paid channel,
-please note that the original source code is publicly available on GitHub.
-若您通过付费渠道获得本仓库项目，请注意原始源码在 GitHub 上可免费获取。
+This repository is intended to remain freely accessible.
+
+---
+
+根据 MIT License，允许商业使用。  
+若本仓库项目或其核心源码被用于商业产品或付费服务，请在显著位置说明原始实现版本可在 GitHub 上免费获取。
+
+本仓库旨在保持自由访问。
