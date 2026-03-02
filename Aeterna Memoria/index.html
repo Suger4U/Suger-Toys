@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Aeterna Memoria</title>
+    <style>
+        /**
+         * Aeterna Memoria - Web Application Stylesheet
+         * 
+         * @file        主样式表文件
+         * @author      Suger
+         * @version     1.0.0
+         * @description 包含应用的所有CSS样式规则
+         * 
+         * 字体配置:
+         * - Cinzel: 用于界面标题，提供古典庄严的视觉效果
+         * - Playfair Display: 用于诗句文本，提供优雅的斜体风格
+         */
+
+        /* 导入魔法字体系列，Cinzel用于界面标题，Playfair Display用于诗句文本 */
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital@1&display=swap');
+
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; 
+            background: radial-gradient(circle at center, #1a1a1d 0%, #050505 100%);
+            font-family: 'Cinzel', serif;
+            user-select: none;
+            color: #D4AF37;
+        }
+
+        /**
+         * 动态噪点背景层
+         * 使用SVG滤镜生成分形噪点效果，为深色背景添加细微的纹理
+         */
+        body::before {
+            content: "";
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+            opacity: 0.15; pointer-events: none; z-index: 0;
+        }
+
+        /**
+         * 视频输入预览窗口
+         * 位于页面右下角，用于显示摄像头画面
+         */
+        #input-video {
+            position: absolute; bottom: 30px; right: 30px; 
+            width: 240px; height: 180px; 
+            object-fit: cover; transform: scaleX(-1); 
+            border-radius: 12px;
+            opacity: 0.3; z-index: 5;
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            transition: opacity 0.5s;
+        }
+        #input-video:hover { opacity: 0.8; }
+
+        #gl-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+
+        /**
+         * 序列显示容器
+         * 水平居中排列，用于显示玩家捕获的数字序列
+         */
+        #sequence-display {
+            position: absolute; top: 60px; left: 0; width: 100%;
+            display: flex; justify-content: center; gap: 40px;
+        }
+
+        /**
+         * 单个数字样式
+         * 金色主题色，带有渐入动画效果
+         */
+        .seq-digit {
+            font-family: 'Cinzel', serif;
+            font-size: 4rem; 
+            color: #D4AF37;
+            text-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
+            opacity: 0; transform: translateY(10px);
+            animation: magicFadeIn 1s ease-out forwards;
+        }
+
+        /**
+         * 灰烬状态样式
+         * 序列错误时，数字以灰烬形式消散
+         */
+        .seq-digit.ash {
+            animation: burnAway 1.2s ease-in forwards;
+            color: #555 !important; text-shadow: none !important;
+        }
+
+        /**
+         * 魔法渐入动画
+         * 数字出现时的特效：从缩放状态到正常大小，同时模糊度降低
+         */
+        @keyframes magicFadeIn {
+            0% { opacity: 0; transform: scale(0.8) translateY(20px); filter: blur(10px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+        }
+        
+        /**
+         * 燃烧消散动画
+         * 序列错误时的数字消散效果
+         */
+        @keyframes burnAway {
+            0% { opacity: 1; filter: blur(0); }
+            100% { opacity: 0; filter: blur(10px); transform: scale(0.9) translateY(-20px); color: #888; }
+        }
+
+        /**
+         * 幸运文字弹出效果
+         * 成功捕获流星时显示的提示文字
+         */
+        .lucky-pop {
+            position: absolute;
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+            font-size: 2rem; color: #fff;
+            text-shadow: 0 0 15px rgba(212, 175, 55, 1);
+            pointer-events: none;
+            animation: runeFloat 1.5s ease-out forwards;
+            white-space: nowrap; z-index: 100;
+            letter-spacing: 2px;
+        }
+        
+        /**
+         * 失败文字弹出效果
+         * 捕获过多流星时显示的失败提示
+         */
+        .fail-pop {
+            position: absolute;
+            font-family: 'Cinzel', serif;
+            font-size: 2.5rem; color: #888;
+            letter-spacing: 5px;
+            pointer-events: none;
+            animation: failFade 2s ease-in-out forwards;
+            text-shadow: 0 0 10px rgba(255,255,255,0.1);
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 100%; text-align: center;
+        }
+
+        /**
+         * 符文浮动动画
+         * 用于幸运文字和提示信息的浮动效果
+         */
+        @keyframes runeFloat {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+            20% { opacity: 1; transform: translate(-50%, -80%) scale(1.1); }
+            100% { transform: translate(-50%, -150%) scale(1.0); opacity: 0; }
+        }
+        
+        /**
+         * 失败淡出动画
+         * 失败文字的渐隐效果
+         */
+        @keyframes failFade {
+            0% { opacity: 0; letter-spacing: 10px; }
+            20% { opacity: 1; letter-spacing: 5px; }
+            80% { opacity: 1; filter: blur(0px); }
+            100% { opacity: 0; filter: blur(10px); }
+        }
+
+        /**
+         * 中央箴言显示区域
+         * 位于屏幕中央，用于显示成功回合后的拉丁文箴言和中文翻译
+         */
+        #center-proverb {
+            position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); text-align: center;
+            opacity: 0; transition: opacity 1s;
+            z-index: 15;
+        }
+        
+        /**
+         * 拉丁文箴言样式
+         * 金色大号字体，带有发光效果
+         */
+        .cp-lat { font-size: 3rem; color: #D4AF37; text-shadow: 0 0 20px rgba(212, 175, 55, 0.4); margin-bottom: 15px; }
+        
+        /**
+         * 中文翻译样式
+         * 使用Playfair Display斜体，灰色文字
+         */
+        .cp-cn { font-family: 'Playfair Display', serif; font-style: italic; font-size: 1.2rem; color: #ccc; }
+
+        /**
+         * 开始屏幕
+         * 游戏开始前的欢迎界面，包含标题、副标题和开始按钮
+         */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 5, 0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 999; pointer-events: auto;
+            transition: opacity 1.5s;
+        }
+        
+        /**
+         * 主标题样式
+         * 使用渐变色效果，从白色过渡到金色
+         */
+        h1 { 
+            font-family: 'Cinzel', serif;
+            background: -webkit-linear-gradient(#fff, #D4AF37);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 4rem; margin-bottom: 10px; 
+            filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6));
+            letter-spacing: 8px;
+            font-weight: 400;
+        }
+        
+        /**
+         * 副标题样式
+         * 引用格式的斜体文字
+         */
+        .subtitle {
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            font-size: 1.2rem; color: rgba(255,255,255,0.6);
+            margin-bottom: 50px;
+        }
+        
+        /**
+         * 按钮样式
+         * 金色边框透明背景，悬停时变为金色填充
+         */
+        button {
+            background: transparent;
+            border: 1px solid #D4AF37;
+            color: #D4AF37; 
+            padding: 15px 50px; 
+            font-size: 1.3rem; 
+            font-family: 'Cinzel', serif;
+            cursor: pointer; 
+            transition: all 0.5s ease;
+            letter-spacing: 3px;
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+        }
+        
+        button:hover { 
+            background: rgba(212, 175, 55, 0.1); 
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
+            color: #fff; border-color: #fff;
+            letter-spacing: 5px;
+        }
+
+        p { color: #888; margin-top: 30px; font-size: 0.8rem; letter-spacing: 2px; }
+
+        /**
+         * 胜利消息容器
+         * 游戏通关后显示的最终胜利界面
+         */
+        #win-msg {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 200;
+            flex-direction: column; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 2s;
+        }
+        
+        /**
+         * 胜利日期样式
+         * 金色边框的日期显示
+         */
+        .win-date { 
+            font-size: 3rem; color: #D4AF37; letter-spacing: 10px; 
+            border-top: 1px solid #D4AF37; border-bottom: 1px solid #D4AF37;
+            padding: 20px 40px; margin-bottom: 40px;
+        }
+        
+        /**
+         * 胜利诗歌样式
+         * 使用Playfair Display字体显示胜利信息
+         */
+        .win-poem { 
+            font-family: 'Playfair Display', serif; font-style: italic; 
+            font-size: 1.5rem; color: #ccc; text-align: center; line-height: 2; 
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 视频输入元素，用于摄像头捕捉 -->
+    <video id="input-video" playsinline muted></video>
+
+    <!-- 开始屏幕 -->
+    <div id="start-screen">
+        <h1>Aeterna Memoria</h1>
+        <div class="subtitle">Time is not a fading hourglass, but an eternal river.</div>
+        <button id="btn-start">Aperi Oculum Temporis</button>
+        <p>需摄像头权限 | 张开手掌召唤法阵 | 寻找隐秘序列</p>
+    </div>
+
+    <!-- WebGL渲染画布 -->
+    <canvas id="gl-canvas"></canvas>
+
+    <!-- UI层容器 -->
+    <div id="ui-layer">
+        <div id="sequence-display"></div>
+        <div id="center-proverb">
+            <div class="cp-lat"></div>
+            <div class="cp-cn"></div>
+        </div>
+        <div id="win-msg">
+            <div class="win-date">2025.02.20</div>
+            <div class="win-poem">
+                "我曾在漫长的时光里熄灭星辰，只为在这条长河里，精准地截取到你。"<br>
+                (I have extinguished the stars in the long river of time, just to capture you with precision.)
+            </div>
+        </div>
+    </div>
+
+    <!-- MediaPipe依赖库 -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- Three.js依赖映射 -->
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        /**
+         * 配置常量
+         * 定义游戏的核心参数和阈值
+         */
+        const CONFIG = {
+            SEQUENCE: [2, 0, 2, 5, 0, 2, 2, 0],      // 目标序列：每个数字代表该回合需要捕获的流星数量
+            COLLISION_RADIUS: 2.2,                    // 碰撞检测半径：流星与法阵中心的距离阈值
+            ORB_SMOOTH: 0.25,                         // 法阵平滑移动系数：0-1，值越小移动越平滑
+            SPAWN_Y_MARGIN: 2.5                       // 生成位置最小间距：防止流星重叠生成
+        };
+
+        /**
+         * 文本资源
+         * 游戏中显示的所有文本内容
+         */
+        const TEXTS = {
+            HITS: ["Foreseen", "Inscribed", "Captured"],  // 成功捕获时的提示文字
+            FAIL_1: "Vanished",                             // 第一阶段失败提示
+            FAIL_2: "Ad Nihilum",                           // 第二阶段失败提示
+            QUOTES: [                                       // 成功回合后显示的箴言库
+                { lat: "Amor fati", cn: "热爱命运。" },
+                { lat: "Aeterno modo", cn: "以永恒的方式。" },
+                { lat: "Per aspera ad astra", cn: "循此苦旅，以达星辰。" },
+                { lat: "Tempus fugit, amor manet", cn: "时光飞逝，唯爱永存。" },
+                { lat: "Dum spiro, spero", cn: "只要呼吸尚在，希望就在。" }
+            ]
+        };
+
+        /**
+         * 游戏状态对象
+         * 存储游戏运行时的所有状态信息
+         */
+        const state = {
+            isActive: false,              // 游戏是否处于激活状态
+            seqIndex: 0,                  // 当前序列索引
+            roundState: 'IDLE',           // 当前回合状态：IDLE(空闲)/ACTIVE(进行中)
+            roundTimer: 0,                // 回合计时器
+            currentRoundTarget: 0,        // 当前回合目标流星数量
+            currentRoundHits: 0,          // 当前回合已捕获数量
+            handPos: new THREE.Vector3(), // 检测到的手部位置
+            isHandOpen: false             // 手掌是否张开
+        };
+
+        /**
+         * Three.js场景初始化
+         * 设置渲染器、场景、相机等基础3D环境
+         */
+        const canvas = document.getElementById('gl-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const scene = new THREE.Scene();
+        const frustumSize = 24; 
+        const aspect = window.innerWidth / window.innerHeight;
+        const camera = new THREE.OrthographicCamera(
+            -frustumSize * aspect / 2, frustumSize * aspect / 2,
+            frustumSize / 2, -frustumSize / 2,
+            0.1, 100
+        );
+        camera.position.z = 10;
+
+        /**
+         * 材质生成器
+         * 使用Canvas API动态生成程序化纹理
+         * @param {string} type - 纹理类型：mandala_circle(圆形曼陀罗)/mandala_square(方形曼陀罗)/spark(火花)/glow(辉光)
+         * @returns {THREE.CanvasTexture} 生成的纹理对象
+         */
+        const createMagicTexture = (type) => {
+            const size = 256;
+            const c = document.createElement('canvas'); c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            const cx = size/2, cy = size/2;
+            
+            if (type === 'mandala_circle') {
+                // 绘制圆形曼陀罗图案
+                ctx.strokeStyle = '#D4AF37';
+                ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(cx, cy, 100, 0, Math.PI*2); ctx.stroke();
+                ctx.beginPath(); ctx.arc(cx, cy, 90, 0, Math.PI*2); ctx.stroke();
+                
+                for(let i=0; i<12; i++) {
+                    let a = (i/12) * Math.PI*2;
+                    let x = cx + Math.cos(a)*95;
+                    let y = cy + Math.sin(a)*95;
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath(); ctx.arc(x,y, 3, 0, Math.PI*2); ctx.fill();
+                }
+            } else if (type === 'mandala_square') {
+                // 绘制方形曼陀罗图案
+                ctx.strokeStyle = 'rgba(212, 175, 55, 0.8)';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(cx-70, cy-70, 140, 140);
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(Math.PI/4);
+                ctx.strokeRect(-50, -50, 100, 100);
+                ctx.restore();
+            } else if (type === 'spark') {
+                // 绘制径向渐变火花纹理
+                const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 64);
+                g.addColorStop(0, '#fff');
+                g.addColorStop(0.4, '#D4AF37');
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+            } else if (type === 'glow') {
+                // 绘制辉光纹理
+                const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 120);
+                g.addColorStop(0, 'rgba(212, 175, 55, 0.6)');
+                g.addColorStop(0.5, 'rgba(100, 80, 20, 0.2)');
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+            }
+
+            return new THREE.CanvasTexture(c);
+        };
+
+        // 预生成所有纹理资源
+        const texMandalaCircle = createMagicTexture('mandala_circle');
+        const texMandalaSquare = createMagicTexture('mandala_square');
+        const texSpark = createMagicTexture('spark');
+        const texGlow = createMagicTexture('glow');
+
+        /**
+         * 法阵对象组
+         * 包含核心辉光和两个旋转的几何环
+         */
+        const shieldGroup = new THREE.Group();
+        const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: texGlow, blending: THREE.AdditiveBlending }));
+        coreGlow.scale.set(7, 7, 1);
+        shieldGroup.add(coreGlow);
+
+        const ringGeo = new THREE.PlaneGeometry(5, 5);
+        const ringMat = new THREE.MeshBasicMaterial({ map: texMandalaCircle, transparent: true, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        shieldGroup.add(ringMesh);
+
+        const squareGeo = new THREE.PlaneGeometry(3.5, 3.5);
+        const squareMat = new THREE.MeshBasicMaterial({ map: texMandalaSquare, transparent: true, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+        const squareMesh = new THREE.Mesh(squareGeo, squareMat);
+        shieldGroup.add(squareMesh);
+
+        shieldGroup.visible = false;
+        scene.add(shieldGroup);
+
+        /**
+         * 粒子系统类
+         * 用于创建爆炸效果
+         */
+        class Particle {
+            constructor() {
+                this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texSpark, blending: THREE.AdditiveBlending }));
+                this.active = false;
+                this.vel = new THREE.Vector3();
+                this.sprite.visible = false;
+                scene.add(this.sprite);
+            }
+            
+            /**
+             * 在指定位置生成粒子
+             * @param {THREE.Vector3} pos - 生成位置
+             */
+            spawn(pos) {
+                this.active = true;
+                this.sprite.visible = true;
+                this.sprite.position.copy(pos);
+                this.sprite.scale.set(Math.random()*0.5+0.2, Math.random()*0.5+0.2, 1);
+                this.sprite.material.opacity = 1;
+                const a = Math.random() * Math.PI * 2;
+                const s = Math.random() * 0.3 + 0.1;
+                this.vel.set(Math.cos(a)*s, Math.sin(a)*s, 0);
+            }
+            
+            /**
+             * 更新粒子状态
+             * 每帧调用，处理粒子移动和透明度衰减
+             */
+            update() {
+                if(!this.active) return;
+                this.sprite.position.add(this.vel);
+                this.sprite.material.opacity -= 0.04;
+                if(this.sprite.material.opacity <= 0) {
+                    this.active = false;
+                    this.sprite.visible = false;
+                }
+            }
+        }
+        
+        // 初始化粒子池
+        const particles = Array(40).fill().map(() => new Particle());
+        
+        /**
+         * 在指定位置触发爆炸效果
+         * @param {THREE.Vector3} pos - 爆炸中心位置
+         */
+        function boom(pos) {
+            particles.forEach(p => { if(!p.active && Math.random() > 0.5) p.spawn(pos); });
+        }
+
+        /**
+         * 流星类
+         * 从左侧进入场景，玩家需要通过张开手掌的法阵捕获
+         */
+        class Comet {
+            constructor() {
+                this.mesh = new THREE.Sprite(new THREE.SpriteMaterial({ map: texSpark, blending: THREE.AdditiveBlending, color: 0xffffee })); 
+                this.mesh.scale.set(2, 2, 1);
+                this.active = false;
+                this.velocity = new THREE.Vector3();
+                this.mesh.visible = false; 
+                scene.add(this.mesh);
+            }
+            
+            /**
+             * 在指定Y位置生成流星
+             * 流星从左侧进入，穿越屏幕高度的一半
+             * @param {number} yPos - 起始Y坐标
+             */
+            spawn(yPos) {
+                this.active = true;
+                this.mesh.visible = true;
+                this.mesh.position.set(-camera.right - 2 - Math.random() * 3, yPos, 0);
+                
+                // 计算终点Y坐标，确保轨迹跨越至少半个屏幕高度
+                const halfH = (camera.top - camera.bottom) * 0.5;
+                let endY;
+                if (yPos > 0) { 
+                    // 起点在上半区，终点在下半区
+                    endY = camera.bottom + Math.random() * halfH; 
+                } else {
+                    // 起点在下半区，终点在上半区
+                    endY = 0 + Math.random() * camera.top;
+                }
+
+                // 计算运动方向并设置速度
+                const dir = new THREE.Vector3(camera.right + 4, endY, 0).sub(this.mesh.position).normalize();
+                this.velocity.copy(dir).multiplyScalar(0.15 + Math.random() * 0.05); 
+            }
+            
+            /**
+             * 更新流星位置
+             * 每帧调用，处理流星移动和边界检测
+             */
+            update() {
+                if(!this.active) return;
+                this.mesh.position.add(this.velocity);
+                if(this.mesh.position.x > camera.right + 4) {
+                    this.active = false;
+                    this.mesh.visible = false;
+                }
+            }
+            
+            /**
+             * 流星被法阵捕获
+             * 触发爆炸效果并更新游戏状态
+             */
+            hit() {
+                this.active = false;
+                this.mesh.visible = false;
+                boom(this.mesh.position);
+                state.currentRoundHits++; 
+                checkFailFast(this.mesh.position);
+            }
+        }
+        
+        // 初始化流星池
+        const comets = Array(15).fill().map(() => new Comet()); 
+
+        /**
+         * 核心游戏逻辑更新
+         * 每帧调用，处理回合状态机
+         */
+        function updateLogic() {
+            if (!state.isActive) return;
+            if (state.roundState === 'IDLE') {
+                state.roundTimer++;
+                if (state.roundTimer > 80) startRound(); 
+            } else if (state.roundState === 'ACTIVE') {
+                const anyActive = comets.some(c => c.active);
+                if (!anyActive) evaluateRound();
+            }
+        }
+
+        /**
+         * 开始新回合
+         * 根据当前序列索引确定目标数量，并生成相应数量的流星
+         */
+        function startRound() {
+            state.roundState = 'ACTIVE';
+            state.currentRoundHits = 0;
+            const target = CONFIG.SEQUENCE[state.seqIndex];
+            state.currentRoundTarget = target;
+
+            // 计算生成数量：在[target, 5]范围内随机
+            let min = target;
+            let max = 5;
+            if (target === 0) min = 1;  // 目标为0时至少生成1个干扰流星
+            
+            let count = Math.floor(Math.random() * (max - min + 1)) + min;
+
+            // 轨道占用记录，避免流星重叠
+            let usedY = [];
+            
+            for (let i = 0; i < count; i++) {
+                const comet = comets.find(c => !c.active);
+                if (!comet) break; 
+
+                // 尝试找到安全的生成位置
+                let safeY = 0;
+                let found = false;
+
+                for (let attempt = 0; attempt < 20; attempt++) {
+                    safeY = camera.bottom + 2 + Math.random() * (camera.top - camera.bottom - 4);
+                    let collision = false;
+                    for (let y of usedY) {
+                        if (Math.abs(y - safeY) < CONFIG.SPAWN_Y_MARGIN) {
+                            collision = true; break;
+                        }
+                    }
+                    if (!collision) { found = true; break; }
+                }
+
+                // 如果找不到安全位置，使用随机位置
+                if (!found) {
+                   safeY = camera.bottom + 2 + Math.random() * (camera.top - camera.bottom - 4);
+                }
+
+                comet.spawn(safeY);
+                usedY.push(safeY);
+            }
+        }
+
+        /**
+         * 快速失败检测
+         * 捕获的流星数量超过目标时立即触发失败
+         * @param {THREE.Vector3} pos - 捕获位置
+         */
+        function checkFailFast(pos) {
+            if (state.currentRoundHits <= state.currentRoundTarget) {
+                // 成功捕获，显示随机提示文字
+                const word = TEXTS.HITS[Math.floor(Math.random() * TEXTS.HITS.length)];
+                showText(pos, word, "lucky-pop"); 
+            } else {
+                // 捕获过多，触发失败
+                triggerFailText();
+                resetSequence();
+            }
+        }
+
+        /**
+         * 评估当前回合结果
+         * 比较捕获数量与目标数量，决定成功或失败
+         */
+        function evaluateRound() {
+            if (state.currentRoundHits === state.currentRoundTarget) {
+                // 成功：显示箴言并添加数字
+                showProverb();
+                addSeqDigit(state.currentRoundTarget);
+                state.seqIndex++;
+                if (state.seqIndex >= CONFIG.SEQUENCE.length) setTimeout(winGame, 2000);
+            } else {
+                // 失败：如果已有进度则重置序列
+                if (state.seqIndex > 0) {
+                    triggerFailText();
+                    resetSequence();
+                }
+            }
+            state.roundState = 'IDLE';
+            state.roundTimer = 0;
+        }
+
+        /**
+         * 重置序列状态
+         * 清除已显示的数字并重置索引
+         */
+        function resetSequence() {
+            state.seqIndex = 0;
+            const digits = document.querySelectorAll('.seq-digit');
+            digits.forEach(d => {
+                d.classList.add('ash');
+                setTimeout(() => d.remove(), 1200);
+            });
+        }
+        
+        /**
+         * 在3D空间位置显示2D文字
+         * @param {THREE.Vector3} pos - 3D位置
+         * @param {string} text - 显示文字
+         * @param {string} className - CSS类名
+         */
+        function showText(pos, text, className) {
+            const v = pos.clone().project(camera);
+            const x = (v.x * .5 + .5) * window.innerWidth;
+            const y = (-(v.y * .5) + .5) * window.innerHeight;
+            const el = document.createElement('div');
+            el.className = className;
+            el.innerText = text;
+            el.style.left = x + 'px'; el.style.top = y + 'px';
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1200);
+        }
+
+        /**
+         * 显示失败提示文字
+         * 顺序显示"Vanished"和"Ad Nihilum"
+         */
+        function triggerFailText() {
+            const el = document.createElement('div');
+            el.className = 'fail-pop';
+            el.innerText = TEXTS.FAIL_1;
+            document.body.appendChild(el);
+            
+            setTimeout(() => {
+                if (el) el.innerText = TEXTS.FAIL_2;
+            }, 1000);
+            
+            setTimeout(() => {
+                if (el) el.remove();
+            }, 2000);
+        }
+
+        /**
+         * 显示随机箴言
+         * 从箴言库中随机选择一条，显示拉丁文和中文
+         */
+        function showProverb() {
+            const quote = TEXTS.QUOTES[Math.floor(Math.random() * TEXTS.QUOTES.length)];
+            const container = document.getElementById('center-proverb');
+            container.querySelector('.cp-lat').innerText = quote.lat;
+            container.querySelector('.cp-cn').innerText = quote.cn;
+            
+            container.style.opacity = 1;
+            setTimeout(() => {
+                container.style.opacity = 0;
+            }, 3000);
+        }
+
+        /**
+         * 添加序列数字显示
+         * @param {number} num - 要显示的数字
+         */
+        function addSeqDigit(num) {
+            const el = document.createElement('div');
+            el.className = 'seq-digit';
+            el.innerText = num;
+            document.getElementById('sequence-display').appendChild(el);
+        }
+
+        /**
+         * 游戏胜利处理
+         * 显示胜利界面并触发庆祝特效
+         */
+        function winGame() {
+            state.isActive = false;
+            document.getElementById('sequence-display').innerHTML = '';
+            const winDiv = document.getElementById('win-msg');
+            winDiv.style.display = 'flex';
+            setTimeout(() => winDiv.style.opacity = 1, 100);
+            
+            // 持续触发爆炸特效
+            setInterval(() => {
+                boom(new THREE.Vector3((Math.random()-0.5)*20, (Math.random()-0.5)*15, 0));
+            }, 100);
+        }
+
+        const videoElement = document.getElementById('input-video');
+
+        /**
+         * MediaPipe手部检测回调
+         * 处理检测到的手部 landmarks，更新游戏状态
+         * @param {Object} results - MediaPipe手部检测结果
+         */
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const lm = results.multiHandLandmarks[0];
+                const wrist = lm[0];
+                const middleTip = lm[12]; 
+
+                // 计算手掌中心点
+                const cx = (wrist.x + middleTip.x) / 2; 
+                const cy = (wrist.y + middleTip.y) / 2;
+                const ndcX = (1 - cx) * 2 - 1; 
+                const ndcY = -(cy * 2 - 1);
+                state.handPos.set(ndcX * camera.right, ndcY * camera.top, 0);
+
+                // 判断手掌是否张开：比较中指指尖到手腕的距离与中指 MCP 关节到手腕的距离
+                const dWristToMCP = Math.sqrt(Math.pow(lm[9].x - lm[0].x, 2) + Math.pow(lm[9].y - lm[0].y, 2));
+                const dWristToTip = Math.sqrt(Math.pow(lm[12].x - lm[0].x, 2) + Math.pow(lm[12].y - lm[0].y, 2));
+                
+                state.isHandOpen = (dWristToTip > dWristToMCP * 1.2);
+
+            } else {
+                state.isHandOpen = false;
+            }
+        }
+
+        const btn = document.getElementById('btn-start');
+        
+        /**
+         * 开始按钮点击事件
+         * 初始化摄像头和MediaPipe手部检测
+         */
+        btn.addEventListener('click', async () => {
+            btn.innerText = "OPENING EYE...";
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            hands.onResults(onResults);
+            
+            const cam = new Camera(videoElement, {
+                onFrame: async () => await hands.send({image: videoElement}),
+                width: 640, height: 480
+            });
+            await cam.start();
+            
+            document.getElementById('start-screen').style.opacity = 0; 
+            setTimeout(() => document.getElementById('start-screen').style.display = 'none', 1500);
+            state.isActive = true;
+            animate();
+        });
+
+        /**
+         * 游戏主循环
+         * 每帧处理所有游戏逻辑和渲染
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!state.isActive && state.seqIndex === 0) return;
+
+            // 法阵交互逻辑
+            if (state.isHandOpen) {
+                shieldGroup.visible = true; 
+                shieldGroup.position.lerp(state.handPos, CONFIG.ORB_SMOOTH);
+                
+                // 法阵旋转动画
+                ringMesh.rotation.z -= 0.02; 
+                squareMesh.rotation.z += 0.03;
+                
+                // 法阵缩放渐变
+                if (shieldGroup.scale.x < 1) {
+                    shieldGroup.scale.addScalar(0.1);
+                }
+
+                // 流星碰撞检测
+                comets.forEach(c => {
+                    if(c.active) {
+                        const dist = shieldGroup.position.distanceTo(c.mesh.position);
+                        if(dist < CONFIG.COLLISION_RADIUS) c.hit();
+                    }
+                });
+            } else {
+                // 手掌闭合时隐藏法阵
+                if (shieldGroup.visible) {
+                    shieldGroup.scale.subScalar(0.1);
+                    if (shieldGroup.scale.x <= 0) {
+                        shieldGroup.visible = false;
+                        shieldGroup.scale.set(0.1, 0.1, 1); 
+                    }
+                }
+            }
+
+            // 更新游戏逻辑
+            updateLogic();
+            comets.forEach(c => c.update());
+            particles.forEach(p => p.update());
+            
+            renderer.render(scene, camera);
+        }
+
+        /**
+         * 窗口大小调整处理
+         * 重新计算相机参数和渲染器尺寸
+         */
+        window.addEventListener('resize', () => {
+            const a = window.innerWidth / window.innerHeight;
+            camera.left = -frustumSize * a / 2; camera.right = frustumSize * a / 2;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
